@@ -88,7 +88,7 @@ cd infra
    terraform init
    ```
 2. **`terraform fmt`** — normaliza el formato de los ficheros `.tf`.
-   Usa `-recursive` para incluir el módulo `modules/datalake`.
+   Usa `-recursive` para incluir los módulos `modules/s3-datalake` y `modules/lambda-csv-normalizer`.
 
    ```bash
    terraform fmt -recursive

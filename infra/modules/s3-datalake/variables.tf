@@ -8,11 +8,6 @@ variable "account_id" {
   type        = string
 }
 
-variable "aws_region" {
-  description = "AWS region the module is deployed into."
-  type        = string
-}
-
 variable "common_tags" {
   description = "Tags applied to every resource created by this module."
   type        = map(string)
@@ -34,28 +29,4 @@ variable "enable_bucket_versioning" {
   description = "Whether to enable versioning on both buckets. Defaults to false to keep dev environments cheap and easy to destroy."
   type        = bool
   default     = false
-}
-
-variable "log_retention_days" {
-  description = "CloudWatch log retention in days for the Lambda log group. Use 7 for demos and labs; set higher for production per compliance requirements."
-  type        = number
-  default     = 7
-}
-
-variable "lambda_runtime" {
-  description = "Python runtime for the transformation Lambda."
-  type        = string
-  default     = "python3.13"
-}
-
-variable "lambda_timeout_seconds" {
-  description = "Timeout for the transformation Lambda, in seconds."
-  type        = number
-  default     = 60
-}
-
-variable "lambda_memory_mb" {
-  description = "Memory allocated to the transformation Lambda, in MB."
-  type        = number
-  default     = 256
 }
