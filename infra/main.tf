@@ -26,6 +26,4 @@ module "datalake" {
   processed_bucket_force_destroy = var.processed_bucket_force_destroy
   enable_bucket_versioning       = var.enable_bucket_versioning
   log_retention_days             = var.log_retention_days
-
-  lambda_pandas_layer_arn = var.lambda_pandas_layer_arn
 }

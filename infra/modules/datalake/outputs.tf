@@ -9,7 +9,7 @@ output "raw_bucket_arn" {
 }
 
 output "processed_bucket_name" {
-  description = "S3 bucket where transformed Parquet files land."
+  description = "S3 bucket where normalized CSV files land."
   value       = aws_s3_bucket.processed.bucket
 }
 
@@ -19,13 +19,13 @@ output "processed_bucket_arn" {
 }
 
 output "lambda_function_name" {
-  description = "Name of the CSV-to-Parquet transformation Lambda."
-  value       = aws_lambda_function.csv_to_parquet.function_name
+  description = "Name of the CSV normalizer Lambda."
+  value       = aws_lambda_function.csv_normalizer.function_name
 }
 
 output "lambda_function_arn" {
-  description = "ARN of the CSV-to-Parquet transformation Lambda."
-  value       = aws_lambda_function.csv_to_parquet.arn
+  description = "ARN of the CSV normalizer Lambda."
+  value       = aws_lambda_function.csv_normalizer.arn
 }
 
 output "log_group_name" {

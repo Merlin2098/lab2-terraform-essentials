@@ -9,7 +9,7 @@ output "raw_bucket_arn" {
 }
 
 output "processed_bucket_name" {
-  description = "S3 bucket where transformed Parquet files land."
+  description = "S3 bucket where normalized CSV files land."
   value       = module.datalake.processed_bucket_name
 }
 
@@ -19,12 +19,12 @@ output "processed_bucket_arn" {
 }
 
 output "lambda_function_name" {
-  description = "Name of the CSV-to-Parquet transformation Lambda."
+  description = "Name of the CSV normalizer Lambda."
   value       = module.datalake.lambda_function_name
 }
 
 output "lambda_function_arn" {
-  description = "ARN of the CSV-to-Parquet transformation Lambda."
+  description = "ARN of the CSV normalizer Lambda."
   value       = module.datalake.lambda_function_arn
 }
 

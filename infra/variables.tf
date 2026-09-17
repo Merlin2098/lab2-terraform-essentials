@@ -57,16 +57,3 @@ variable "log_retention_days" {
   type        = number
   default     = 7
 }
-
-variable "lambda_pandas_layer_arn" {
-  description = <<-EOT
-    ARN of the AWS-managed "AWS SDK for pandas" Lambda layer (provides pandas
-    and pyarrow so the function can write Parquet without a custom build).
-
-    This ARN is region- and runtime-specific and changes over time. Verify
-    the current one for your region before applying:
-    AWS Console -> Lambda -> Layers -> "Add a layer" -> "AWS layers" ->
-    "AWSSDKPandas-Python313".
-  EOT
-  type        = string
-}

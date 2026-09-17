@@ -1,7 +1,7 @@
 locals {
   raw_bucket_name       = "${var.name_prefix}-${var.account_id}-raw"
   processed_bucket_name = "${var.name_prefix}-${var.account_id}-processed"
-  lambda_function_name  = "${var.name_prefix}-csv-to-parquet"
+  lambda_function_name  = "${var.name_prefix}-csv-normalizer"
   lambda_source_dir     = "${path.module}/../../../src/lambda"
 }
 
@@ -75,12 +75,12 @@ resource "aws_s3_bucket_public_access_block" "processed" {
   restrict_public_buckets = true
 }
 
-# --- Lambda: transforms CSV (raw) into Parquet (processed) ---
+# --- Lambda: validates and normalizes CSV (raw) into cleaned CSV (processed) ---
 
 data "archive_file" "lambda_source" {
   type        = "zip"
   source_dir  = local.lambda_source_dir
-  output_path = "${path.module}/../../../artifacts/csv_to_parquet.zip"
+  output_path = "${path.module}/../../../artifacts/csv_normalizer.zip"
 }
 
 data "aws_iam_policy_document" "lambda_assume_role" {
@@ -95,7 +95,7 @@ data "aws_iam_policy_document" "lambda_assume_role" {
 }
 
 resource "aws_iam_role" "lambda_execution" {
-  name               = "${var.name_prefix}-csv-to-parquet-role"
+  name               = "${var.name_prefix}-csv-normalizer-role"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
   tags               = var.common_tags
 }
@@ -122,7 +122,7 @@ data "aws_iam_policy_document" "lambda_permissions" {
 }
 
 resource "aws_iam_role_policy" "lambda_permissions" {
-  name   = "${var.name_prefix}-csv-to-parquet-policy"
+  name   = "${var.name_prefix}-csv-normalizer-policy"
   role   = aws_iam_role.lambda_execution.id
   policy = data.aws_iam_policy_document.lambda_permissions.json
 }
@@ -133,18 +133,16 @@ resource "aws_cloudwatch_log_group" "lambda" {
   tags              = var.common_tags
 }
 
-resource "aws_lambda_function" "csv_to_parquet" {
+resource "aws_lambda_function" "csv_normalizer" {
   function_name = local.lambda_function_name
   role          = aws_iam_role.lambda_execution.arn
-  handler       = "csv_to_parquet.handler"
+  handler       = "csv_normalizer.handler"
   runtime       = var.lambda_runtime
   timeout       = var.lambda_timeout_seconds
   memory_size   = var.lambda_memory_mb
 
   filename         = data.archive_file.lambda_source.output_path
   source_code_hash = data.archive_file.lambda_source.output_base64sha256
-
-  layers = [var.lambda_pandas_layer_arn]
 
   environment {
     variables = {
@@ -160,7 +158,7 @@ resource "aws_lambda_function" "csv_to_parquet" {
 resource "aws_lambda_permission" "allow_s3_invoke" {
   statement_id  = "AllowExecutionFromS3Raw"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.csv_to_parquet.function_name
+  function_name = aws_lambda_function.csv_normalizer.function_name
   principal     = "s3.amazonaws.com"
   source_arn    = aws_s3_bucket.raw.arn
 }
@@ -169,7 +167,7 @@ resource "aws_s3_bucket_notification" "raw_csv_upload" {
   bucket = aws_s3_bucket.raw.id
 
   lambda_function {
-    lambda_function_arn = aws_lambda_function.csv_to_parquet.arn
+    lambda_function_arn = aws_lambda_function.csv_normalizer.arn
     events              = ["s3:ObjectCreated:*"]
     filter_suffix       = ".csv"
   }
