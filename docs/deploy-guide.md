@@ -134,6 +134,41 @@ Tras un `apply` exitoso:
 terraform output lambda_function_arn
 ```
 
+### 6. Probar la solución end-to-end
+
+Con la infraestructura ya desplegada, usa `scripts/aws/upload_data_to_raw.py`
+para validar el pipeline completo (S3 raw → Lambda → S3 processed).
+
+El script:
+
+* Sube todos los `*.csv` de `data/` (en la raíz del proyecto) al bucket raw.
+  Los nombres del bucket raw y del log group se resuelven vía
+  `terraform output -json`, nunca están hardcodeados.
+* Deja los archivos subidos en el bucket (no es un test, es una carga real de
+  datos) para que la notificación S3 → Lambda se dispare normalmente.
+* Espera unos segundos a que la Lambda termine de ejecutarse y descarga sus
+  eventos de CloudWatch Logs a un archivo nuevo en `logs/` (carpeta ignorada
+  por git), con nombre `<timestamp_utc>.log`.
+
+Requiere las credenciales AWS activas — se cargan automáticamente desde
+`.env.credentials` (ver paso 1), sin necesidad de `source`/`Set-Item` manual.
+
+Ejecuta desde la raíz del proyecto (con el entorno virtual activado):
+
+```bash
+python scripts/aws/upload_data_to_raw.py
+```
+
+Verifica el resultado:
+
+```bash
+# Los CSV normalizados deberían aparecer en el bucket processed
+aws s3 ls "s3://$(terraform -chdir=infra output -raw processed_bucket_name)/"
+
+# Revisa el log descargado
+cat logs/<timestamp_utc>.log
+```
+
 ## Referencia de outputs disponibles
 
 | Output | Descripción |

@@ -21,8 +21,10 @@ datos:
 
 1. Subís un archivo **CSV** a un bucket S3 (`raw`).
 2. Eso dispara automáticamente una **función Lambda**.
-3. La Lambda convierte el CSV a formato **Parquet** (más liviano y eficiente
-   para análisis) y lo deja en otro bucket S3 (`processed`).
+3. La Lambda valida y **normaliza** el CSV (encabezados en minúscula/snake_case,
+   valores sin espacios sobrantes) usando solo la librería estándar de
+   Python — sin Lambda layers — y deja el resultado en otro bucket S3
+   (`processed`).
 4. Cada vez que se procesa un archivo, queda un registro en **CloudWatch
    Logs** confirmando que se cargó.
 
@@ -37,28 +39,40 @@ sin tocar la consola de AWS.
 - Qué son las **variables** y los **outputs**, y por qué te evitan repetir
   valores a mano.
 - Qué es un **módulo** de Terraform y por qué conviene agrupar recursos
-  relacionados en uno, en vez de tener todo suelto en un solo archivo.
+  relacionados en uno, en vez de tener todo suelto en un solo archivo, y
+  cuándo separarlos en módulos independientes (S3 vs. Lambda) para
+  mantenerlos enfocados en una sola responsabilidad.
 - Cómo se conectan servicios de AWS entre sí (S3 → Lambda) sin escribir
   código de "pegamento" manual.
 
 ## Estructura del repositorio
 
 ```
-infra/                      # Todo lo que define la infraestructura (Terraform)
-  main.tf                    # Punto de entrada: instancia el módulo del data lake
-  variables.tf                # Variables configurables (nombre de proyecto, región, etc.)
-  outputs.tf                   # Valores que Terraform expone al terminar (ARNs, nombres)
-  terraform.tfvars.example      # Ejemplo de valores para tus variables
+infra/                          # Todo lo que define la infraestructura (Terraform)
+  main.tf                        # Punto de entrada: instancia los módulos del data lake
+  variables.tf                    # Variables configurables (nombre de proyecto, región, etc.)
+  outputs.tf                       # Valores que Terraform expone al terminar (ARNs, nombres)
+  terraform.tfvars.example          # Ejemplo de valores para tus variables
+  backend.tf.example                 # Ejemplo de configuración de backend remoto (opcional)
   modules/
-    datalake/                    # Módulo con los buckets, la Lambda, IAM y la conexión entre ellos
+    s3-datalake/                      # Buckets raw y processed (versioning, cifrado, bloqueo público)
+    lambda-csv-normalizer/             # Función Lambda, rol/policy IAM, log group y notificación S3
 
 src/
   lambda/
-    csv_to_parquet.py           # Código Python que corre dentro de la Lambda
+    csv_normalizer.py               # Código Python que corre dentro de la Lambda
   generator/
-    generator.py                 # Script para generar CSVs de prueba
+    generator.py                     # Script para generar CSVs de prueba
 
-data/                        # Acá se guardan los CSVs que generás localmente
+scripts/
+  aws/
+    upload_data_to_raw.py           # Sube los CSV de data/ al bucket raw y descarga los logs de la Lambda
+  python/
+    setup_env.sh / setup_env.ps1     # Crea el entorno virtual (.venv)
+    update_venv.sh / update_venv.ps1  # Instala/actualiza dependencias desde requirements*.txt
+
+data/                            # Acá se guardan los CSVs que generás o cargás localmente
+logs/                            # Logs de CloudWatch descargados por scripts/aws/upload_data_to_raw.py
 ```
 
 No necesitás editar el código Python para completar el lab — ya está
@@ -69,11 +83,34 @@ armado. Tu trabajo principal es escribir y entender el código Terraform en
 
 1. Tener instalado **Terraform** (`terraform version` debería funcionar en
    tu terminal).
-2. Tener credenciales de AWS configuradas (las mismas que usás para entrar
-   a la consola, vía `aws configure` o variables de entorno).
-3. Copiar `infra/terraform.tfvars.example` a `infra/terraform.tfvars` y
-   revisar los valores — en particular, **verificar el ARN de la Lambda
-   Layer de pandas** para tu región (se explica dentro del archivo).
+2. Tener credenciales de AWS configuradas. Copiá `.env.example` a
+   `.env.credentials` en la raíz del proyecto y completá tus valores reales
+   (nunca comitees ese archivo). El detalle completo de este paso está en
+   [`docs/deploy-guide.md`](docs/deploy-guide.md).
+3. Copiar `infra/terraform.tfvars.example` a `infra/terraform.tfvars` si
+   querés sobrescribir algún default (no es obligatorio: no hay variables
+   sin default en este proyecto).
+4. Crear el entorno virtual de Python e instalar dependencias:
+
+   ```bash
+   ./scripts/python/setup_env.sh
+   ./scripts/python/update_venv.sh
+   ```
+
+## Cómo generar datasets de prueba
+
+`src/generator/generator.py` genera CSVs aleatorios en `data/` (columnas
+`id`, `name`, `signup_date`, `amount`), listos para cargar al data lake.
+Cada archivo se guarda como `data/orders_<id-aleatorio>.csv`.
+
+```bash
+python src/generator/generator.py                    # 1 archivo, 100 filas (default)
+python src/generator/generator.py --rows 500          # 1 archivo, 500 filas
+python src/generator/generator.py --files 3 --rows 50 # 3 archivos, 50 filas cada uno
+```
+
+También podés poner tus propios CSVs en `data/` manualmente — el pipeline
+no depende del generador, solo espera un CSV con encabezado.
 
 ## Cómo se corre
 
@@ -86,16 +123,18 @@ terraform plan       # Muestra qué va a crear/cambiar, sin hacerlo todavía
 terraform apply       # Aplica esos cambios en tu cuenta de AWS
 ```
 
-Para generar un CSV de prueba y subirlo al data lake:
+Para generar un CSV de prueba, cargarlo al data lake y validar el pipeline
+completo (desde la raíz del proyecto):
 
 ```bash
 python src/generator/generator.py
-aws s3 cp data/<archivo>.csv s3://<nombre-del-bucket-raw>/
+python scripts/aws/upload_data_to_raw.py
 ```
 
-El nombre del bucket lo obtenés con `terraform output raw_bucket_name`
-después de aplicar. Revisá CloudWatch Logs y el bucket `processed` para
-confirmar que el archivo fue transformado.
+`upload_data_to_raw.py` sube todos los CSV de `data/` al bucket `raw`
+(resuelto automáticamente vía `terraform output`), espera a que la Lambda
+los procese, y descarga el log de CloudWatch de esa ejecución a `logs/`.
+Más detalle en el paso 6 de [`docs/deploy-guide.md`](docs/deploy-guide.md).
 
 Al terminar el laboratorio, **no dejes recursos corriendo en tu cuenta**:
 
@@ -117,10 +156,6 @@ agregar un log group, cambiar una variable y ver cómo cambia el plan.
 **Segunda mitad — automatización:** agregar el bucket `processed`, la
 función Lambda, conectarla al bucket `raw`, y probar el flujo completo
 subiendo un CSV generado por vos.
-
-El detalle completo de esta progresión, y las decisiones de diseño detrás
-del caso, están documentados en
-[`specs/2026-09-14-lab2-caso-datalake-personal-design.md`](specs/2026-09-14-lab2-caso-datalake-personal-design.md).
 
 ## Si algo sale mal
 
